@@ -57,12 +57,34 @@ def order_generator(env, cafe):
     while True:
         yield env.timeout(random.expovariate(cafe.cfg.lam))
         order_id += 1
-        order = Order(order_id, env.now)
+        u = random.random()
+        if u < cafe.cfg.p_food_only:
+            has_food, has_drink = True, False
+        elif u < cafe.cfg.p_food_only + cafe.cfg.p_drink_only:
+            has_food, has_drink = False, True
+        else:
+            has_food, has_drink = True, True
+        order = Order(order_id, env.now, has_food, has_drink)
         env.process(cafe.process_order(order))
 
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Cafe queue simulation")
+    p.add_argument("--lam", type=float, default=Config.lam)
+    p.add_argument("--drink_time", type=float, default=Config.drink_time)
+    p.add_argument("--food_time", type=float, default=Config.food_time)
+    p.add_argument("--n_cashier", type=int, default=Config.n_cashier)
+    p.add_argument("--n_drink", type=int, default=Config.n_drink)
+    p.add_argument("--sim_time", type=float, default=Config.sim_time)
+    p.add_argument("--seed", type=int, default=42)
+    return p.parse_args()
+
 if __name__ == "__main__":
-    random.seed(42)
-    cfg = Config()
+    args = parse_args()
+    random.seed(args.seed)
+    cfg = Config(lam=args.lam, drink_time=args.drink_time,
+                 food_time=args.food_time, n_cashier=args.n_cashier,
+                 n_drink=args.n_drink, sim_time=args.sim_time)
     env = simpy.Environment()
     cafe = Cafe(env, cfg)
     env.process(order_generator(env, cafe))
@@ -75,3 +97,7 @@ if __name__ == "__main__":
     print(f"Ej klara vid slut:   {unfinished}")
     print(f"  varav i kö:        {len(cafe.kaffe.queue)}")
     print(f"  varav serveras:    {cafe.kaffe.count}")
+
+    n_food = sum(o.has_food for o in cafe.arrived)
+    n_drink = sum(o.has_drink for o in cafe.arrived)
+    print(f"Mat: {n_food}, dryck: {n_drink}, kvot 1:{n_drink / n_food:.2f}")
