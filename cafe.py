@@ -9,7 +9,7 @@ class Config:
     drink_time: float = 1 #time to make a drink
     food_time: float = 1 #time to make food
     n_cashier: int = 1
-    n_drink: int = 1
+    n_drinkmaker: int = 1
     sim_time: float = 120 #minutes
     food_drink_ratio: float = 1.64  # 1:1.64 där 1 är mat och 1.64 är dryck
     p_both: float = 0.32            # andel ordrar med både mat och dryck(kan välja vad som men p_food_only och p_drink_only förändras med p_both)
@@ -23,19 +23,21 @@ class Order:
     def __init__(self, order_id, arrival_time, has_food, has_drink):
         self.id = order_id
         self.arrival_time = arrival_time
+        self.start_time = None 
+        self.done_time = None #When food_done and drink_done both are True
         self.has_food = has_food      # True/False
         self.has_drink = has_drink    # True/False
-        self.start_time = None
-        self.done_time = None
+        self.food_done = not has_food  #Inverted depending on has_food
+        self.drink_done = not has_drink #Inverted depending on has_drink
 
 class Cafe: 
     def __init__(self,env,cfg):
         self.env = env
         self.cfg = cfg
-        self.kassa = simpy.Resource(env, capacity=cfg.n_cashier)
-        self.kaffe = simpy.Resource(env, capacity=cfg.n_drink)
-        self.finished = [] #for the finished orders
+        self.kassa = simpy.PriorityResource(env, capacity=cfg.n_cashier) #Station for cashiers with priority
+        self.kaffe = simpy.PriorityResource(env, capacity=cfg.n_drinkmaker) #Station for drinkmakers
         self.arrived = [] 
+        self.finished = [] #for the finished orders
 
     
     def process_order(self, order):
@@ -51,6 +53,16 @@ class Cafe:
         order.done_time = self.env.now
         self.finished.append(order)
         print(f"{self.env.now:6.2f}  Order {order.id} klar")
+
+    def make_food(self, order):
+        pass
+    def make_drink(self, order):
+        pass
+    def check_done(self, order):
+        if order.food_done and order.drink_done:
+            order.done_time = self.env.now
+            self.finished.append(order)
+
 
 def order_generator(env, cafe):
     order_id = 0
@@ -74,7 +86,7 @@ def parse_args():
     p.add_argument("--drink_time", type=float, default=Config.drink_time)
     p.add_argument("--food_time", type=float, default=Config.food_time)
     p.add_argument("--n_cashier", type=int, default=Config.n_cashier)
-    p.add_argument("--n_drink", type=int, default=Config.n_drink)
+    p.add_argument("--n_drinkmaker", type=int, default=Config.n_drinkmaker)
     p.add_argument("--sim_time", type=float, default=Config.sim_time)
     p.add_argument("--seed", type=int, default=42)
     return p.parse_args()
@@ -84,7 +96,7 @@ if __name__ == "__main__":
     random.seed(args.seed)
     cfg = Config(lam=args.lam, drink_time=args.drink_time,
                  food_time=args.food_time, n_cashier=args.n_cashier,
-                 n_drink=args.n_drink, sim_time=args.sim_time)
+                 n_drinkmaker=args.n_drinkmaker, sim_time=args.sim_time)
     env = simpy.Environment()
     cafe = Cafe(env, cfg)
     env.process(order_generator(env, cafe))
@@ -99,5 +111,5 @@ if __name__ == "__main__":
     print(f"      varav serveras:    {cafe.kaffe.count}")
 
     n_food = sum(o.has_food for o in cafe.arrived)
-    n_drink = sum(o.has_drink for o in cafe.arrived)
-    print(f"Mat: {n_food}, dryck: {n_drink}, kvot 1:{n_drink / n_food:.2f}")
+    n_drinkmaker = sum(o.has_drink for o in cafe.arrived)
+    print(f"Mat: {n_food}, dryck: {n_drinkmaker}, kvot 1:{n_drinkmaker / n_food:.2f}")
