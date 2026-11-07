@@ -5,11 +5,11 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    lam: float = 5 #arrivals/minute
+    lam: float = 2 #arrivals/minute
     drink_time: float = 1 #time to make a drink
     food_time: float = 1 #time to make food
-    n_cashier: int = 1
-    n_drinkmaker: int = 1
+    n_cashier: int = 2
+    n_drinkmaker: int = 2
     sim_time: float = 120 #minutes
     register_time: float = 0.5
     
@@ -144,4 +144,39 @@ if __name__ == "__main__":
 
     n_food = sum(o.has_food for o in cafe.arrived)
     n_drinkmaker = sum(o.has_drink for o in cafe.arrived)
+
+    print("\n")
+
     print(f"Mat: {n_food}, dryck: {n_drinkmaker}, kvot 1:{n_drinkmaker / n_food:.2f}")
+
+    print("\n")
+
+
+    online = [o.done_time - o.arrival_time for o in cafe.finished if o.is_online]
+    online_drink = [o.done_time - o.arrival_time for o in cafe.finished if o.is_online and o.has_drink and not o.has_food ]
+    online_food = [o.done_time - o.arrival_time for o in cafe.finished if o.is_online and o.has_food and not o.has_drink ]
+
+    physical = [o.done_time - o.arrival_time for o in cafe.finished if not o.is_online]
+    physical_drink = [o.done_time - o.arrival_time for o in cafe.finished if not o.is_online and o.has_drink and not o.has_food ]
+    physical_food = [o.done_time - o.arrival_time for o in cafe.finished if not o.is_online and o.has_food and not o.has_drink ]
+
+    
+    if online:
+        print(f" Online ordrar: {len(online)}, medeltid: {sum(online) / len(online):.2f}  min")
+    else:
+        print("Online:  inga klara ordrar")
+    print(f"Online drickor: {len(online_drink)}, medeltid: {sum(online_drink) / len(online_drink):.2f}  min")
+    print(f"    Online mat: {len(online_food)}, medeltid: {sum(online_food) / len(online_food):.2f}  min")
+
+    print("\n")
+
+    if online:
+        print(f" Fysisk ordrar: {len(physical)}, medeltid: {sum(physical) / len(physical):.2f}  min")
+    else:
+        print("Fysisk:  inga klara ordrar")
+    print(f"Fysisk drickor: {len(physical_drink)}, medeltid: {sum(physical_drink) / len(physical_drink):.2f}  min")
+    print(f"    Fysisk mat: {len(physical_food)}, medeltid: {sum(physical_food) / len(physical_food):.2f}  min")
+
+
+#////////////////////////////////////////////////////////////////////////////////////////
+
