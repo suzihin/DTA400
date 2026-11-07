@@ -11,11 +11,15 @@ class Config:
     n_cashier: int = 1
     n_drinkmaker: int = 1
     sim_time: float = 120 #minutes
+    register_time: float = 0.5
+    
     p_online: float = 0.3 
+    
     food_drink_ratio: float = 1.64  # 1:1.64 där 1 är mat och 1.64 är dryck
     p_both: float = 0.32            # andel ordrar med både mat och dryck(kan välja vad som men p_food_only och p_drink_only förändras med p_both)
     p_food_only: float = round((1 - food_drink_ratio * p_both) / (1 + food_drink_ratio), 4) #annars blir det 0.18000000000000005
     p_drink_only: float = round(1 - p_both - p_food_only, 4)
+
 
 #Next step is probably creating order class
 
@@ -44,6 +48,10 @@ class Cafe:
     def process_order(self, order):
         self.arrived.append(order)
         print(f"{self.env.now:6.2f}  Order {order.id} kommer in")
+        if not order.is_online:
+            with self.kassa.request(priority=1) as req:
+                yield req
+                yield self.env.timeout(self.cfg.register_time)
         
         if order.has_food:
             self.env.process(self.make_food(order))
@@ -99,7 +107,7 @@ def order_generator(env, cafe):
         else:
             has_food, has_drink = True, True
         order = Order(order_id, env.now, has_food, has_drink, cafe.cfg.p_online)
-        cafe.process_order(order)
+        env.process(cafe.process_order(order))
 
 
 def parse_args():
@@ -130,8 +138,8 @@ if __name__ == "__main__":
     
     print(f"Antal ankomna ordrar:    {len(cafe.arrived)}")
     print(f"   Ej klara vid slut:    {unfinished}")
-    print(f"          varav i kö:    {len(cafe.kaffe.queue)}")
-    print(f"       Mat i process:    {cafe.kassa.count}")
+    print(f"          varav i kö:    {len(cafe.kaffe.queue) + len(cafe.kassa.queue)}")
+    print(f"      Kassa upptagen:    {cafe.kassa.count}")
     print(f"   Drickor i process:    {cafe.kaffe.count}")
 
     n_food = sum(o.has_food for o in cafe.arrived)
