@@ -131,7 +131,8 @@ if __name__ == "__main__":
     print(f"Antal ankomna ordrar:    {len(cafe.arrived)}")
     print(f"   Ej klara vid slut:    {unfinished}")
     print(f"          varav i kö:    {len(cafe.kaffe.queue)}")
-    print(f"      varav serveras:    {cafe.kaffe.count}")
+    print(f"       Mat i process:    {cafe.kassa.count}")
+    print(f"   Drickor i process:    {cafe.kaffe.count}")
 
     n_food = sum(o.has_food for o in cafe.arrived)
     n_drinkmaker = sum(o.has_drink for o in cafe.arrived)
