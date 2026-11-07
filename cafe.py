@@ -13,8 +13,8 @@ class Config:
     sim_time: float = 120 #minutes
     food_drink_ratio: float = 1.64  # 1:1.64 där 1 är mat och 1.64 är dryck
     p_both: float = 0.32            # andel ordrar med både mat och dryck(kan välja vad som men p_food_only och p_drink_only förändras med p_both)
-    p_food_only: float = (1 - food_drink_ratio * p_both) / (1 + food_drink_ratio)
-    p_drink_only: float = 1 - p_both - p_food_only
+    p_food_only: float = (1 - food_drink_ratio * p_both) / (1 + food_drink_ratio) #0.18
+    p_drink_only: float = 1 - p_both - p_food_only #0.5
 
 
 #Next step is probably creating order class
@@ -58,9 +58,9 @@ def order_generator(env, cafe):
         yield env.timeout(random.expovariate(cafe.cfg.lam))
         order_id += 1
         u = random.random()
-        if u < cafe.cfg.p_food_only:
+        if 0 <= u <= cafe.cfg.p_food_only:
             has_food, has_drink = True, False
-        elif u < cafe.cfg.p_food_only + cafe.cfg.p_drink_only:
+        elif cafe.cfg.p_food_only < u <= (cafe.cfg.p_food_only + cafe.cfg.p_drink_only):
             has_food, has_drink = False, True
         else:
             has_food, has_drink = True, True
@@ -90,13 +90,13 @@ if __name__ == "__main__":
     env.process(order_generator(env, cafe))
     env.run(until=cfg.sim_time)
     unfinished = len(cafe.arrived) - len(cafe.finished)
-    print(f"\nKonfiguration: {cfg}")
-    print(f"Antal klara ordrar: {len(cafe.finished)}")
+    print(f"\n     Konfiguration:    {cfg}")
+    print(f"  Antal klara ordrar:    {len(cafe.finished)}")
     
-    print(f"Antal ankomna ordrar: {len(cafe.arrived)}")
-    print(f"Ej klara vid slut:   {unfinished}")
-    print(f"  varav i kö:        {len(cafe.kaffe.queue)}")
-    print(f"  varav serveras:    {cafe.kaffe.count}")
+    print(f"Antal ankomna ordrar:    {len(cafe.arrived)}")
+    print(f"   Ej klara vid slut:    {unfinished}")
+    print(f"          varav i kö:    {len(cafe.kaffe.queue)}")
+    print(f"      varav serveras:    {cafe.kaffe.count}")
 
     n_food = sum(o.has_food for o in cafe.arrived)
     n_drink = sum(o.has_drink for o in cafe.arrived)
