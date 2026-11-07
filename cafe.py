@@ -11,16 +11,16 @@ class Config:
     n_cashier: int = 1
     n_drinkmaker: int = 1
     sim_time: float = 120 #minutes
+    p_online: float = 0.3 
     food_drink_ratio: float = 1.64  # 1:1.64 där 1 är mat och 1.64 är dryck
     p_both: float = 0.32            # andel ordrar med både mat och dryck(kan välja vad som men p_food_only och p_drink_only förändras med p_both)
-    p_food_only: float = (1 - food_drink_ratio * p_both) / (1 + food_drink_ratio) #0.18
-    p_drink_only: float = 1 - p_both - p_food_only #0.5
-
+    p_food_only: float = round((1 - food_drink_ratio * p_both) / (1 + food_drink_ratio), 4) #annars blir det 0.18000000000000005
+    p_drink_only: float = round(1 - p_both - p_food_only, 4)
 
 #Next step is probably creating order class
 
 class Order:
-    def __init__(self, order_id, arrival_time, has_food, has_drink):
+    def __init__(self, order_id, arrival_time, has_food, has_drink, p_online):
         self.id = order_id
         self.arrival_time = arrival_time
         self.start_time = None 
@@ -29,6 +29,7 @@ class Order:
         self.has_drink = has_drink    # True/False
         self.food_done = not has_food  #Inverted depending on has_food
         self.drink_done = not has_drink #Inverted depending on has_drink
+        self.is_online = random.random() <= p_online
 
 class Cafe: 
     def __init__(self,env,cfg):
@@ -43,25 +44,46 @@ class Cafe:
     def process_order(self, order):
         self.arrived.append(order)
         print(f"{self.env.now:6.2f}  Order {order.id} kommer in")
+        
+        if order.has_food:
+            self.env.process(self.make_food(order))
+        if order.has_drink:
+            self.env.process(self.make_drink(order))
 
-        with self.kaffe.request() as req:
-            yield req
-            order.start_time = self.env.now
-            print(f"{self.env.now:6.2f}  Order {order.id} börjar")
-            yield self.env.timeout(random.expovariate(1 / self.cfg.drink_time))
 
-        order.done_time = self.env.now
-        self.finished.append(order)
-        print(f"{self.env.now:6.2f}  Order {order.id} klar")
+        
 
     def make_food(self, order):
-        pass
+        if order.is_online:
+            prio = 0
+        else:
+            prio = 1
+        with self.kassa.request(priority=prio) as req:
+            yield req
+            order.start_time = self.env.now
+            print(f"{self.env.now:6.2f}  Order {order.id} mat börjar")
+            yield self.env.timeout(random.expovariate(1 / self.cfg.food_time))
+        order.food_done = True
+        self.check_done(order)
+
     def make_drink(self, order):
-        pass
+        if order.is_online:
+            prio = 0
+        else:
+            prio = 1
+        with self.kaffe.request(priority=prio) as req:
+            yield req
+            order.start_time = self.env.now
+            print(f"{self.env.now:6.2f}  Order {order.id} dricka börjar")
+            yield self.env.timeout(random.expovariate(1 / self.cfg.drink_time))
+        order.drink_done = True
+        self.check_done(order)
+
     def check_done(self, order):
         if order.food_done and order.drink_done:
             order.done_time = self.env.now
             self.finished.append(order)
+            print(f"{self.env.now:6.2f}  Order {order.id} klar!")
 
 
 def order_generator(env, cafe):
@@ -76,8 +98,8 @@ def order_generator(env, cafe):
             has_food, has_drink = False, True
         else:
             has_food, has_drink = True, True
-        order = Order(order_id, env.now, has_food, has_drink)
-        env.process(cafe.process_order(order))
+        order = Order(order_id, env.now, has_food, has_drink, cafe.cfg.p_online)
+        cafe.process_order(order)
 
 
 def parse_args():
@@ -89,6 +111,7 @@ def parse_args():
     p.add_argument("--n_drinkmaker", type=int, default=Config.n_drinkmaker)
     p.add_argument("--sim_time", type=float, default=Config.sim_time)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--p_online", type=float, default=0.3)
     return p.parse_args()
 
 if __name__ == "__main__":
@@ -96,7 +119,7 @@ if __name__ == "__main__":
     random.seed(args.seed)
     cfg = Config(lam=args.lam, drink_time=args.drink_time,
                  food_time=args.food_time, n_cashier=args.n_cashier,
-                 n_drinkmaker=args.n_drinkmaker, sim_time=args.sim_time)
+                 n_drinkmaker=args.n_drinkmaker, sim_time=args.sim_time, p_online=args.p_online)
     env = simpy.Environment()
     cafe = Cafe(env, cfg)
     env.process(order_generator(env, cafe))
