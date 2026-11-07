@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import argparse
 import random
 import simpy
@@ -122,6 +123,12 @@ def parse_args():
     p.add_argument("--p_online", type=float, default=0.3)
     return p.parse_args()
 
+def print_stats(name, times):
+    if times:
+        print(f"{name:>16}: {len(times):4d} ordrar, medeltid {sum(times) / len(times):.2f} min")
+    else:
+        print(f"{name:>16}: inga klara ordrar")
+
 if __name__ == "__main__":
     args = parse_args()
     random.seed(args.seed)
@@ -161,22 +168,23 @@ if __name__ == "__main__":
     physical_food = [o.done_time - o.arrival_time for o in cafe.finished if not o.is_online and o.has_food and not o.has_drink ]
 
     
-    if online:
-        print(f" Online ordrar: {len(online)}, medeltid: {sum(online) / len(online):.2f}  min")
-    else:
-        print("Online:  inga klara ordrar")
-    print(f"Online drickor: {len(online_drink)}, medeltid: {sum(online_drink) / len(online_drink):.2f}  min")
-    print(f"    Online mat: {len(online_food)}, medeltid: {sum(online_food) / len(online_food):.2f}  min")
-
-    print("\n")
-
-    if online:
-        print(f" Fysisk ordrar: {len(physical)}, medeltid: {sum(physical) / len(physical):.2f}  min")
-    else:
-        print("Fysisk:  inga klara ordrar")
-    print(f"Fysisk drickor: {len(physical_drink)}, medeltid: {sum(physical_drink) / len(physical_drink):.2f}  min")
-    print(f"    Fysisk mat: {len(physical_food)}, medeltid: {sum(physical_food) / len(physical_food):.2f}  min")
-
+    print_stats("Online", online)
+    print_stats("Online dryck", online_drink)
+    print_stats("Online mat", online_food)
+    print()
+    print_stats("Fysisk", physical)
+    print_stats("Fysisk dryck", physical_drink)
+    print_stats("Fysisk mat", physical_food)
 
 #////////////////////////////////////////////////////////////////////////////////////////
+
+    data = [online_drink, online_food, physical_drink, physical_food]
+    labels = ["Online\ndryck", "Online\nmat", "Fysisk\ndryck", "Fysisk\nmat"]
+
+    plt.boxplot(data, tick_labels=labels)
+    plt.ylabel("Tid i caféet (min)")
+    plt.title(f"Tid i systemet, ({cfg.n_cashier},{cfg.n_drinkmaker}), λ = {cfg.lam}")
+    plt.savefig("tid_per_kundtyp.png", dpi=200)
+    plt.show()
+
 
