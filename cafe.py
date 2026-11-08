@@ -6,14 +6,15 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    lam_physical: float = 2 #arrivals/minute
+    lam_physical: float = 1 #arrivals/minute
     lam_online: float = 0 #0.1 0.25 0.5
     drink_time: float = .75 #time to make a drink
     food_time: float = .75 #time to make food
-    n_cashier: int = 1
-    n_drinkmaker: int = 3
+    n_cashier: int = 2
+    n_drinkmaker: int = 2
     sim_time: float = 480 #minutes
     register_time: float = (1/3)
+    verbose: bool = False        # skriv ut varje händelse? (stäng av i experimentet)
     
     
     food_drink_ratio: float = 1.64  # 1:1.64 där 1 är mat och 1.64 är dryck
@@ -48,10 +49,14 @@ class Cafe:
         self.arrived = [] 
         self.finished = [] #for the finished orders
 
+    def log(self, text):
+        if self.cfg.verbose:
+            print(f"{self.env.now:6.2f}  {text}")
+
     
     def process_order(self, order):
         self.arrived.append(order)
-        print(f"{self.env.now:6.2f}  Order {order.id} kommer in")
+        self.log(f"Order {order.id} kommer in")
         if not order.is_online:
             with self.kassa.request(priority=1) as req:
                 yield req
@@ -75,7 +80,7 @@ class Cafe:
         with self.kassa.request(priority=prio) as req:
             yield req
             order.start_time = self.env.now
-            print(f"{self.env.now:6.2f}  Order {order.id} mat börjar")
+            self.log(f"Order {order.id} mat börjar")
             yield self.env.timeout(random.expovariate(1 / self.cfg.food_time))
         order.food_done = True
         order.food_done_time = self.env.now
@@ -89,7 +94,7 @@ class Cafe:
         with self.kaffe.request(priority=prio) as req:
             yield req
             order.start_time = self.env.now
-            print(f"{self.env.now:6.2f}  Order {order.id} dricka börjar")
+            self.log(f"Order {order.id} dricka börjar")
             yield self.env.timeout(random.expovariate(1 / self.cfg.drink_time))
         order.drink_done = True
         order.drink_done_time = self.env.now
@@ -99,7 +104,7 @@ class Cafe:
         if order.food_done and order.drink_done:
             order.done_time = self.env.now
             self.finished.append(order)
-            print(f"{self.env.now:6.2f}  Order {order.id} klar!")
+            self.log(f"Order {order.id} klar!")
 
 
 def order_generator(env, cafe, rate, is_online):
@@ -130,6 +135,40 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     return p.parse_args()
 
+def run_simulation(cfg, seed):
+    """Kör EN arbetsdag och returnerar caféet (med alla ordrar)."""
+    random.seed(seed)
+    env = simpy.Environment()
+    cafe = Cafe(env, cfg)
+    env.process(order_generator(env, cafe, cfg.lam_physical, False))
+    if cfg.lam_online > 0:                                              #solves ZeroDivisionError
+        env.process(order_generator(env, cafe, cfg.lam_online, True))
+    env.run(until=cfg.sim_time)
+    return cafe
+
+
+def mean(values):
+    return sum(values) / len(values) if values else float("nan")
+
+
+def summarize(cafe):
+    """Räknar ut resultaten för EN dag och returnerar dem som en dictionary."""
+    fin = cafe.finished
+    online_orders = [o for o in fin if o.is_online]
+    phys_orders = [o for o in fin if not o.is_online]
+    return {
+        "arrived": len(cafe.arrived),
+        "unfinished": len(cafe.arrived) - len(fin),
+        "online_drink": mean([o.drink_done_time - o.arrival_time for o in online_orders if o.has_drink]),
+        "online_food": mean([o.food_done_time - o.arrival_time for o in online_orders if o.has_food]),
+        "online_total": mean([o.done_time - o.arrival_time for o in online_orders]),
+        "phys_queue": mean([o.reg_start_time - o.arrival_time for o in phys_orders]),
+        "phys_drink": mean([o.drink_done_time - o.registered_time for o in phys_orders if o.has_drink]),
+        "phys_food": mean([o.food_done_time - o.registered_time for o in phys_orders if o.has_food]),
+        "phys_after": mean([o.done_time - o.registered_time for o in phys_orders]),
+    }
+
+
 def print_stats(name, times):
     if times:
         print(f"{name:>16}: {len(times):4d} ordrar, medeltid {sum(times) / len(times):.2f} min")
@@ -138,17 +177,11 @@ def print_stats(name, times):
 
 if __name__ == "__main__":
     args = parse_args()
-    random.seed(args.seed)
     cfg = Config(lam_physical=args.lam_physical, lam_online=args.lam_online,
                  drink_time=args.drink_time, food_time=args.food_time,
                  n_cashier=args.n_cashier, n_drinkmaker=args.n_drinkmaker,
                  sim_time=args.sim_time)
-    env = simpy.Environment()
-    cafe = Cafe(env, cfg)
-    env.process(order_generator(env, cafe, cfg.lam_physical, False))
-    if cfg.lam_online > 0:                                              #solves ZeroDivisionError
-        env.process(order_generator(env, cafe, cfg.lam_online, True)) 
-    env.run(until=cfg.sim_time)
+    cafe = run_simulation(cfg, args.seed)
     unfinished = len(cafe.arrived) - len(cafe.finished)
     print(f"\n     Konfiguration:    {cfg}")
     print(f"  Antal klara ordrar:    {len(cafe.finished)}")
